@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<assert.h>
+#include<string.h>
 #include<x86intrin.h>
 
 
@@ -112,18 +113,17 @@ uint64_t typePrefix(const int valueWidth, const uint64_t typeOffset)
   const uint64_t positionedTypeOffset
     = maskedTypeOffset << valueWidth;
   
-  // now that everything is in the right place, just or-them together
-  // to construct the type prefix.
+  // now that everything is in the right place, just or-them
+  // together to construct the type prefix.
   return (NAN_VALUE | indicatorBit | positionedTypeOffset);
 }
-
 
 
 uint64_t typePrefixMaskForValueWidth(const int valueWidth)
 // returns a mask to extract the type prefix from a boxed value
 // easy to do if you already know the width of the value
 {
-  return  (MAX_MASK << valueWidth);
+  return (MAX_MASK << valueWidth);
 }
 
   
@@ -131,7 +131,7 @@ int indicatorBitPosition(const uint64_t boxedValue)
 // returns the position (0-64) of the indicator
 // bit of the boxed type.
 {
-  if(!is_boxed(boxedValue)) return 64;
+  if(is_double(boxedValue)) return 64;
   
   const uint64_t maskedBoxedValue = boxedValue & MANTISA_MASK;
   const int tmp = _lzcnt_u64(maskedBoxedValue);
@@ -172,11 +172,29 @@ typedef union BoxedValue {
 } BoxedValue;
 
 
-//  boxing
+//--------
+// boxing
+//--------
+
+// integer suport
+
+const uint64_t INT_STENCIL         =  0x7ff8040000000000;
+		   
+BoxedValue boxInt(const int i){
+  BoxedValue returner = (BoxedValue)(INT_STENCIL);
+  returner.packer32.value.as_int = i;
+  return returner;
+}
 
 
-const uint64_t INTEGER_STENCIL = 0x7ff8040000000000;
-const uint64_t FLOAT_STENCIL   = 0x7ff8040100000000;
+float unboxInt(const BoxedValue bv){
+  return bv.packer32.value.as_int;
+}
+
+
+// float support
+
+const uint64_t FLOAT_STENCIL           =  0x7ff8040100000000;
 
 BoxedValue boxFloat(const float f){
   BoxedValue returner = (BoxedValue)(FLOAT_STENCIL);
@@ -184,22 +202,58 @@ BoxedValue boxFloat(const float f){
   return returner;
 }
 
-float unboxFloat(const BoxedValue bv){
+float unboxFloat(const BoxedValue bv)
+{
   return bv.packer32.value.as_float;
 }
 
-		   
-BoxedValue boxInt(const int i){
-  BoxedValue returner = (BoxedValue)(FLOAT_STENCIL);
-  returner.packer32.value.as_int = i;
-  return returner;
+
+// char* support
+
+const uint64_t CHAR_PTR_STENCIL        =  0x7FFC000000000000;
+const uint64_t CHAR_PTR_MASK           =  ~(MAX_MASK << 48);
+
+BoxedValue boxCharPtr(char *ptr)
+{
+  return (BoxedValue)(CHAR_PTR_STENCIL | (uint64_t)ptr);
 }
 
-float unboxInt(const BoxedValue bv){
-  return bv.packer32.value.as_int;
+char* unboxCharPtr(const BoxedValue bv)
+{
+  return (char*)(bv.as_uint64 & CHAR_PTR_MASK);
 }
 
-		   
+
+// const char* support
+const uint64_t CONST_CHAR_PTR_STENCIL  =  0x7FFD000000000000;
+const uint64_t CONST_CHAR_PTR_MASK     =  ~(MAX_MASK << 48);
+
+BoxedValue boxConstCharPtr(const char *ptr)
+{
+  return (BoxedValue)(CONST_CHAR_PTR_STENCIL | (uint64_t)ptr);
+}
+
+const char* unboxConstCharPtr(const BoxedValue bv)
+{
+  return (const char*)(bv.as_uint64 & CONST_CHAR_PTR_MASK);
+}
+
+// boolean support
+const uint64_t BOOL_STENCIL = 0x7FF8000008000000;
+const uint64_t BOOL_MASK    = 0x0000000000000001;
+
+BoxedValue boxBool(const bool bit)
+{
+  return (BoxedValue)(BOOL_STENCIL | (uint64_t)bit);
+}
+
+bool unboxBool(const BoxedValue bv)
+{
+  return (bool)(bv.as_uint64 & BOOL_MASK);
+}
+
+
+
 
 int main(){
   double d = 4.5;
@@ -231,12 +285,29 @@ int main(){
     assert(in == out);
   }
   
-  
   {
     const int in = 42;
     const BoxedValue bv = boxInt(in);
     const int out = unboxInt(bv);
     assert(in == out);
+  }
+
+  {
+    char bluf[20];
+    char* in = bluf;
+    strcpy(in, "This is a test");
+    const BoxedValue bv = boxCharPtr(in);
+    char* out = unboxCharPtr(bv);
+    assert(in == out);
+    assert(!strcmp(in, out));
+  }
+  
+  {
+    const char* in = "This is a test";
+    const BoxedValue bv = boxConstCharPtr(in);
+    const char* out = unboxConstCharPtr(bv);
+    assert(in == out);
+    assert(!strcmp(in, out));
   }
   
   {
@@ -245,6 +316,20 @@ int main(){
     const int owidth = typeIndicatorWidth(32);
     const int tpwidth = typePrefixWidth(0x7ff80408ffffffff);
   }
+
+  {
+    BoxedValue bv;
+    const bool in0 = 0;
+    bv = boxBool(in0);
+    const bool out0 = unboxBool(bv);
+    assert(in0 == out0);
+    
+    const bool in1 = 1;
+    bv = boxBool(in1);
+    const bool out1 = unboxBool(bv);
+    assert(in1 == out1);
+  }
+  
   
   
   for(int i=48; i>=0; i=i-2){
