@@ -96,7 +96,7 @@ bool is_double(const uint64_t val)
 
 uint64_t typePrefix(const int valueWidth, const uint64_t typeOffset)
 // What all the leading bits of a boxed value should be,
-// except for the final bits which hold the value.
+// all bits except for the final bits which hold the value.
 {
   // figure the size and format of the type indicator
   const int indicatorLength = 51-valueWidth;
@@ -122,7 +122,7 @@ uint64_t typePrefix(const int valueWidth, const uint64_t typeOffset)
 uint64_t typePrefixMaskForValueWidth(const int valueWidth)
 // returns a mask to extract the type prefix from a boxed value
 // easy to do if you already know the width of the value
-{
+
   return (MAX_MASK << valueWidth);
 }
 
@@ -329,8 +329,6 @@ int main(){
     const bool out1 = unboxBool(bv);
     assert(in1 == out1);
   }
-  
-  
   
   for(int i=48; i>=0; i=i-2){
     printf("value width = %d   type prefix = %016llX\n",
